@@ -1,8 +1,8 @@
 # Trade Clerks Terms of Service
 
-**Not legal advice. Have a lawyer check it before launch.** [launch date] is the only placeholder left.
+**Not legal advice. Have a lawyer check it before launch.** At launch, update the date (and bump the version if the wording changes).
 
-*Effective [launch date]. Version 1.1.*
+*Effective October 2, 2026. Version 1.1.*
 
 These terms are an agreement between you and Steve Gligor, operating as Trade Clerks, Burlington, Ontario, Canada ("Trade Clerks", "we"). By creating an account or using the app, you agree to them and to our Privacy Policy.
 

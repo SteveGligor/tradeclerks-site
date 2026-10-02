@@ -1,8 +1,8 @@
 # Trade Clerks Privacy Policy
 
-**Not legal advice. Have a lawyer check it before launch.** [launch date] is the only placeholder left.
+**Not legal advice. Have a lawyer check it before launch.** At launch, update the date (and bump the version if the wording changes).
 
-*Effective [launch date]. Version 1.1.*
+*Effective October 2, 2026. Version 1.1.*
 
 Trade Clerks is an app that turns what you say about a job into an invoice, and keeps track of your jobs, customers and the equipment you install. This policy explains what we store, why, who helps us run the app, and how to delete it.
 
