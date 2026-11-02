@@ -1,0 +1,11 @@
+# GitHub Pages runs Jekyll on this repo. Only the built pages (index.html,
+# terms.html, privacy.html) and their assets are the site; the files below are
+# the repo's own working files and are never published. CNAME is GitHub Pages'
+# own default exclude, which a custom list replaces, so it's listed again.
+# Entries match as prefixes: a new root file starting with one of these names
+# won't be published either.
+exclude:
+  - README.md
+  - build.py
+  - content
+  - CNAME
