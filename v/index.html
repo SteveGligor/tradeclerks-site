@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Your document</title>
+<meta name="description" content="An invoice or quote sent to you.">
+<link rel="icon" href="/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+<style>
+  /* The customer page (Trade Clerks app, scheduler plan PR 3): one invoice or quote, read from
+     the token in the fragment (#i=… / #q=…). The script asks the app's server for the document
+     and renders it here; this host never receives the token. Business first, one navy button. */
+  .page { max-width: 640px; margin: 24px auto 0; padding: 0 16px; }
+  .card { background: #fff; border-radius: 14px; box-shadow: 0 1px 3px rgba(27, 42, 74, 0.08); padding: 24px 20px; margin-bottom: 16px; }
+  @media (min-width: 700px) { .card { padding: 32px 36px; } }
+  .biz { display: flex; align-items: center; gap: 16px; }
+  .biz img { height: 44px; width: auto; max-width: 180px; display: block; }
+  .biz .name { font-size: 20px; font-weight: 700; line-height: 1.2; }
+  .biz .contact { color: var(--grey); font-size: 15px; margin-top: 2px; }
+  .kind { color: var(--grey); font-size: 15px; margin: 20px 0 2px; }
+  .number { font-size: 26px; font-weight: 700; line-height: 1.2; margin: 0; }
+  .status { color: var(--grey); font-size: 15px; margin-top: 4px; }
+  .total { font-size: 34px; font-weight: 700; margin: 18px 0 0; font-variant-numeric: tabular-nums; }
+  .total small { display: block; font-size: 14px; color: var(--grey); font-weight: 400; margin-top: 2px; }
+  .facts { margin: 16px 0 0; padding: 0; list-style: none; color: var(--grey); font-size: 15px; }
+  .facts li { padding: 6px 0; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; gap: 12px; }
+  .facts li span:last-child { color: var(--navy); text-align: right; }
+  h2 { font-size: 17px; font-weight: 700; margin: 24px 0 8px; }
+  .lines { width: 100%; border-collapse: collapse; font-size: 15px; }
+  .lines td { padding: 10px 0; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .lines td.amt { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .lines .meta { color: var(--grey); font-size: 14px; }
+  .lines td.tick { width: 28px; padding-right: 8px; }
+  .lines input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--navy); }
+  .sums { margin: 8px 0 0; padding: 0; list-style: none; font-size: 15px; }
+  .sums li { display: flex; justify-content: space-between; padding: 4px 0; color: var(--grey); font-variant-numeric: tabular-nums; }
+  .sums li.grand { color: var(--navy); font-weight: 700; font-size: 17px; border-top: 1px solid var(--border); padding-top: 10px; margin-top: 6px; }
+  .tabs { display: flex; gap: 8px; margin: 12px 0 4px; flex-wrap: wrap; }
+  .tabs button { font: inherit; font-size: 15px; padding: 8px 14px; border-radius: 10px; border: 1px solid var(--border); background: #fff; color: var(--navy); cursor: pointer; }
+  .tabs button[aria-selected=true] { background: var(--navy); color: #fff; border-color: var(--navy); }
+  .plain { margin: 0; padding-left: 20px; }
+  .plain li { margin: 4px 0; }
+  .note { background: var(--light); border-radius: 10px; padding: 12px 14px; margin: 8px 0 0; }
+  .pay { background: var(--light); border-left: 3px solid var(--orange); border-radius: 6px; padding: 12px 14px; margin: 8px 0 0; white-space: pre-line; }
+  .btn { display: inline-block; font: inherit; font-weight: 700; font-size: 16px; padding: 14px 22px; border-radius: 12px; border: 0; cursor: pointer; text-decoration: none; }
+  .btn.primary { background: var(--navy); color: #fff; }
+  .btn.quiet { background: transparent; color: var(--navy); border: 1px solid var(--border); }
+  .btn[disabled] { opacity: 0.5; cursor: default; }
+  .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; align-items: center; }
+  .field label { display: block; font-size: 14px; font-weight: 600; margin: 16px 0 6px; }
+  .field input { font: inherit; font-size: 16px; width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--light); color: var(--navy); }
+  .field input:focus { outline: 2px solid var(--navy); outline-offset: 1px; }
+  .hint { color: var(--grey); font-size: 14px; margin-top: 6px; }
+  .err { color: #B42318; font-size: 15px; margin-top: 10px; }
+  .done { color: var(--navy); font-weight: 600; margin-top: 10px; }
+  .center { text-align: center; padding: 40px 16px; color: var(--grey); }
+  .sr { position: absolute; left: -9999px; }
+  .foot a { color: var(--orange); font-weight: 700; text-decoration: none; }
+</style>
+</head>
+<body>
+<main class="page" id="page">
+  <div class="card center" id="loading">Loading…</div>
+</main>
+<footer class="foot">Sent with <a href="https://tradeclerks.com">Trade Clerks</a></footer>
+
+<script>
+(function () {
+  'use strict';
+  // The app's server: the one function this page talks to (public, token by hash)
+  var API = 'https://dwlmuxmfbnodombqxida.supabase.co/functions/v1/customer-link';
+
+  var page = document.getElementById('page');
+
+  // #i=<token> (invoice) or #q=<token> (quote): 64 hex characters, never sent to this host
+  var m = /^#(i|q)=([0-9a-f]{64})$/.exec(location.hash || '');
+  if (!m) { show(notValid()); return; }
+  var kind = m[1] === 'i' ? 'invoice' : 'quote';
+  var token = m[2];
+  var state = { doc: null, biz: null, hasPdf: false, option: null, ticked: {} };
+
+  fetch(API + '?' + m[1] + '=' + token, { cache: 'no-store' })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, body: j }; }); })
+    .then(function (r) {
+      if (!r.ok || !r.body || !r.body.page) {
+        show(r.status === 404 ? notValid() : couldntLoad());
+        return;
+      }
+      state.doc = r.body.page.document || {};
+      state.biz = r.body.page.business || {};
+      state.hasPdf = !!r.body.page.has_pdf;
+      if (state.doc.kind === 'quote') {
+        var opts = state.doc.options || [];
+        state.option = state.doc.accepted_option_id || (opts.length ? opts[0].id : null);
+        (state.doc.accepted_optional_item_ids || []).forEach(function (id) { state.ticked[id] = true; });
+      }
+      render();
+    })
+    .catch(function () { show(couldntLoad()); });
+
+  // ── Rendering ────────────────────────────────────────────────────────────────
+
+  function render() {
+    var d = state.doc, b = state.biz;
+    document.title = (b.name ? b.name + ' · ' : '') + (d.kind === 'quote' ? 'Quote ' : 'Invoice ') + (d.number || '');
+    var frag = [];
+    frag.push(businessCard(b));
+    frag.push(d.kind === 'quote' ? quoteCard(d, b) : invoiceCard(d, b));
+    page.innerHTML = frag.join('');
+    wire();
+  }
+
+  function businessCard(b) {
+    var contact = [b.phone, b.email].filter(Boolean).map(esc).join(' · ');
+    return '<div class="card"><div class="biz">'
+      + (b.logo_url ? '<img src="' + esc(b.logo_url) + '" alt="">' : '')
+      + '<div><div class="name">' + esc(b.name || 'Your contractor') + '</div>'
+      + (contact ? '<div class="contact">' + contact + '</div>' : '')
+      + (b.address ? '<div class="contact">' + esc(b.address) + '</div>' : '')
+      + '</div></div></div>';
+  }
+
+  function invoiceCard(d, b) {
+    var paid = d.status === 'paid';
+    var status = paid ? 'Paid' + (d.paid_at ? ' ' + day(d.paid_at) : '') : (d.due_date ? 'Due ' + day(d.due_date) : 'Sent');
+    var h = '<div class="card">'
+      + '<div class="kind">Invoice' + (d.bill_to_name ? ' for ' + esc(d.bill_to_name) : '') + '</div>'
+      + '<p class="number">#' + esc(d.number || '') + '</p>'
+      + '<div class="status">' + esc(status) + '</div>'
+      + '<p class="total">' + (Number(d.total) === 0 ? 'No charge' : money(d.total, d)) + (paid ? '<small>Paid, thank you</small>' : (Number(d.total) === 0 ? '' : '<small>Total due</small>')) + '</p>';
+    var facts = [];
+    if (d.sent_at) facts.push(['Sent', day(d.sent_at)]);
+    if (d.service_address) facts.push(['Service address', d.service_address]);
+    if (facts.length) h += '<ul class="facts">' + facts.map(function (f) { return '<li><span>' + esc(f[0]) + '</span><span>' + esc(f[1]) + '</span></li>'; }).join('') + '</ul>';
+    if (d.job_description) h += '<h2>Job</h2><p>' + esc(d.job_description) + '</p>';
+    h += '<h2>Details</h2>' + linesTable(d.lines || [], d, false);
+    h += sums(d);
+    if (!paid && Number(d.total) > 0 && b.payment_instructions) h += '<h2>How to pay</h2><div class="pay">' + esc(b.payment_instructions) + '</div>';
+    h += actions(b, 'invoice');
+    if (b.review_url && /^https:\/\/(g\.page|maps\.app\.goo\.gl|goo\.gl|(www\.|search\.|maps\.|business\.)?google\.[a-z]{2,3}(\.[a-z]{2})?)\//.test(b.review_url)) {
+      h += '<p class="hint">Happy with the work? <a href="' + esc(b.review_url) + '" rel="noopener">Leave ' + esc(b.name || 'us') + ' a Google review</a></p>';
+    }
+    return h + '</div>';
+  }
+
+  function quoteCard(d, b) {
+    var expired = d.status === 'expired';
+    var accepted = d.status === 'accepted' || d.status === 'converted';
+    var declined = d.status === 'declined';
+    var open = !expired && !accepted && !declined;
+    var status = accepted ? 'Accepted' + (d.accepted_at ? ' ' + day(d.accepted_at) : '')
+      : expired ? 'Expired' : declined ? 'Declined' : (d.valid_until ? 'Valid until ' + day(d.valid_until) : 'Sent');
+    var h = '<div class="card">'
+      + '<div class="kind">Quote' + (d.bill_to_name ? ' for ' + esc(d.bill_to_name) : '') + '</div>'
+      + '<p class="number">' + esc(d.number || '') + '</p>'
+      + '<div class="status">' + esc(status) + '</div>';
+    if (d.title) h += '<h2>Quote for</h2><p>' + esc(d.title) + '</p>';
+    var opts = d.options || [];
+    var multi = opts.length > 1;
+    if (multi) {
+      h += '<h2>Options</h2><div class="tabs" role="tablist">' + opts.map(function (o) {
+        return '<button type="button" role="tab" data-option="' + esc(o.id) + '" aria-selected="' + (o.id === state.option) + '"' + (open ? '' : ' disabled') + '>' + esc(o.name) + '</button>';
+      }).join('') + '</div>';
+    } else {
+      h += '<h2>Details</h2>';
+    }
+    var lines = (d.lines || []).filter(function (l) { return multi ? l.option_id === state.option : true; });
+    h += linesTable(lines, d, open);
+    h += '<p class="total" id="quote-total">' + money(quoteTotal(d, lines), d) + '<small>' + (d.tax_label ? 'incl. ' + esc(d.tax_label) : 'Total') + '</small></p>';
+    if ((d.included || []).length) h += '<h2>Included</h2><ul class="plain">' + d.included.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>';
+    if ((d.not_included || []).length) h += '<h2>Not included</h2><ul class="plain">' + d.not_included.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>';
+    if (d.note_to_customer) h += '<h2>A note from ' + esc(b.name || 'your contractor') + '</h2><div class="note">' + esc(d.note_to_customer) + '</div>';
+    if (d.deposit_amount && Number(d.deposit_amount) > 0) {
+      h += '<h2>Deposit to book the work</h2><div class="pay">A deposit of ' + money(d.deposit_amount, d) + ' books the work once you\'re happy to go ahead.'
+        + (b.payment_instructions ? '\n' + esc(b.payment_instructions) : '') + '</div>';
+    }
+    if (accepted) {
+      h += '<p class="done">This quote was accepted' + (d.accepted_at ? ' on ' + day(d.accepted_at) : '') + (d.signed_by ? ' by ' + esc(d.signed_by) : '') + '.</p>';
+    } else if (expired) {
+      h += '<p class="done">This quote has expired. Contact ' + esc(b.name || 'your contractor') + ' for a new one.</p>';
+    } else if (declined) {
+      h += '<p class="done">This quote is no longer open.</p>';
+    } else if (d.status !== 'draft') {
+      h += '<h2>Accept this quote</h2>'
+        + '<div class="field"><label for="name">Your name</label><input id="name" type="text" autocomplete="name" maxlength="100" placeholder="Type your full name"></div>'
+        + '<p class="hint">Accepting tells ' + esc(b.name || 'your contractor') + ' to go ahead' + (multi ? ' with the option you picked' : '') + ((d.lines || []).some(function (l) { return l.optional; }) ? ' and the optional items you ticked' : '') + '.</p>'
+        + '<div class="actions"><button type="button" class="btn primary" id="accept">Accept quote</button></div>'
+        + '<div class="err sr" id="accept-err"></div>';
+    }
+    h += actions(b, 'quote');
+    return h + '</div>';
+  }
+
+  function linesTable(lines, d, canTick) {
+    if (!lines.length) return '<p class="hint">No line items.</p>';
+    return '<table class="lines">' + lines.map(function (l) {
+      var qty = Number(l.quantity);
+      var meta = l.needs_price ? 'Price to be confirmed' : (Number(l.total) === 0 ? 'No charge' : (qty !== 1 ? qty + ' × ' + money(l.unit_price, d) : ''));
+      var tick = l.optional
+        ? '<td class="tick"><input type="checkbox" data-line="' + esc(l.id) + '"' + (state.ticked[l.id] ? ' checked' : '') + (canTick ? '' : ' disabled') + ' aria-label="Add ' + esc(l.description) + '"></td>'
+        : (d.kind === 'quote' && (d.lines || []).some(function (x) { return x.optional; }) ? '<td class="tick"></td>' : '');
+      return '<tr>' + tick + '<td>' + esc(l.description) + (l.optional ? ' <span class="meta">· Optional</span>' : '') + (meta ? '<div class="meta">' + esc(meta) + '</div>' : '') + '</td>'
+        + '<td class="amt">' + (l.needs_price ? '—' : (Number(l.total) === 0 ? 'No charge' : money(l.total, d))) + '</td></tr>';
+    }).join('') + '</table>';
+  }
+
+  function sums(d) {
+    var tax = d.tax_lines && d.tax_lines.length ? d.tax_lines : (Number(d.tax_amount) > 0 ? [{ label: d.tax_label || 'Tax', amount: d.tax_amount }] : []);
+    if (!tax.length) return '';
+    return '<ul class="sums"><li><span>Subtotal</span><span>' + money(d.subtotal, d) + '</span></li>'
+      + tax.map(function (t) { return '<li><span>' + esc(t.label || 'Tax') + (t.rate != null ? ' ' + esc(String(t.rate)) + '%' : '') + '</span><span>' + money(t.amount, d) + '</span></li>'; }).join('')
+      + '<li class="grand"><span>Total</span><span>' + money(d.total, d) + '</span></li></ul>';
+  }
+
+  // The quote's total as the customer has it set: the required lines of the shown option plus
+  // the optional lines ticked, with tax at the quote's rate. The accepted quote shows its stored total.
+  function quoteTotal(d, lines) {
+    if (d.status === 'accepted' || d.status === 'converted') return d.total;
+    var sub = 0;
+    lines.forEach(function (l) { if (!l.optional || state.ticked[l.id]) sub += Number(l.total) || 0; });
+    var tax = Math.round(sub * (Number(d.tax_rate) || 0)) / 100;
+    return Math.round((sub + tax) * 100) / 100;
+  }
+
+  function actions(b, kind) {
+    var h = '<div class="actions">';
+    if (state.hasPdf) h += '<button type="button" class="btn quiet" id="pdf">Download PDF</button>';
+    if (b.email) h += '<a class="btn quiet" href="mailto:' + esc(b.email) + '?subject=' + encodeURIComponent((kind === 'quote' ? 'Quote ' : 'Invoice ') + (state.doc.number || '')) + '">Ask a question</a>';
+    return h + '</div><div class="err sr" id="pdf-err"></div>';
+  }
+
+  function notValid() { return '<div class="card center">This link isn\'t valid.</div>'; }
+  function couldntLoad() { return '<div class="card center">Couldn\'t load this page right now. Try again in a moment.</div>'; }
+  function show(html) { page.innerHTML = html; }
+
+  // ── Behaviour ───────────────────────────────────────────────────────────────
+
+  function wire() {
+    page.querySelectorAll('[data-option]').forEach(function (btn) {
+      btn.addEventListener('click', function () { state.option = btn.getAttribute('data-option'); render(); });
+    });
+    page.querySelectorAll('[data-line]').forEach(function (box) {
+      box.addEventListener('change', function () {
+        state.ticked[box.getAttribute('data-line')] = box.checked;
+        var d = state.doc, multi = (d.options || []).length > 1;
+        var lines = (d.lines || []).filter(function (l) { return multi ? l.option_id === state.option : true; });
+        var total = document.getElementById('quote-total');
+        if (total) total.firstChild.nodeValue = money(quoteTotal(d, lines), d);
+      });
+    });
+    var pdf = document.getElementById('pdf');
+    if (pdf) pdf.addEventListener('click', downloadPdf);
+    var accept = document.getElementById('accept');
+    if (accept) accept.addEventListener('click', acceptQuote);
+  }
+
+  // The PDF that was emailed, fetched here and opened, so the address bar never leaves this site
+  function downloadPdf() {
+    var btn = document.getElementById('pdf'), err = document.getElementById('pdf-err');
+    btn.disabled = true; err.className = 'err sr'; err.textContent = '';
+    fetch(API + '?' + m[1] + '=' + token + '&pdf=1', { cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.blob(); })
+      .then(function (blob) {
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url; a.download = (state.doc.kind === 'quote' ? 'quote-' : 'invoice-') + (state.doc.number || 'document') + '.pdf'; a.rel = 'noopener';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+      })
+      .catch(function () { err.className = 'err'; err.textContent = 'Couldn\'t get the PDF right now. Reply to the email and ' + (state.biz.name || 'your contractor') + ' will send it again.'; })
+      .then(function () { btn.disabled = false; });
+  }
+
+  // Accepting: the option shown, the optional lines ticked, the name typed. Nothing else is sent.
+  function acceptQuote() {
+    var btn = document.getElementById('accept'), err = document.getElementById('accept-err'), nameEl = document.getElementById('name');
+    var name = (nameEl.value || '').trim();
+    err.className = 'err sr'; err.textContent = '';
+    if (name.length < 2) { err.className = 'err'; err.textContent = 'Type your name to accept.'; nameEl.focus(); return; }
+    var d = state.doc, multi = (d.options || []).length > 1;
+    var ids = Object.keys(state.ticked).filter(function (id) {
+      if (!state.ticked[id]) return false;
+      var line = (d.lines || []).filter(function (l) { return l.id === id; })[0];
+      return line && (!multi || line.option_id === state.option);
+    });
+    btn.disabled = true;
+    fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store',
+      body: JSON.stringify({ token: token, option_id: multi ? state.option : null, optional_ids: ids, name: name }) })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, body: j || {} }; }); })
+      .then(function (r) {
+        if (r.ok) {
+          d.status = 'accepted'; d.accepted_at = r.body.accepted_at || new Date().toISOString(); d.signed_by = name;
+          d.accepted_option_id = multi ? state.option : null; d.accepted_optional_item_ids = ids; d.total = r.body.total != null ? r.body.total : d.total;
+          render();
+          var card = page.querySelectorAll('.card')[1]; if (card) card.scrollIntoView({ behavior: 'smooth' });
+          return;
+        }
+        var code = r.body.error || '';
+        var text = code === 'QUOTE_EXPIRED' ? 'This quote has expired. Contact ' + (state.biz.name || 'your contractor') + ' for a new one.'
+          : code === 'QUOTE_ALREADY_ACCEPTED' ? 'This quote was already accepted.'
+          : code === 'QUOTE_DECLINED' ? 'This quote is no longer open.'
+          : code === 'QUOTE_NAME_REQUIRED' ? 'Type your name to accept.'
+          : 'Couldn\'t accept right now. Reply to the email and ' + (state.biz.name || 'your contractor') + ' will sort it out.';
+        err.className = 'err'; err.textContent = text;
+        if (code === 'QUOTE_EXPIRED' || code === 'QUOTE_ALREADY_ACCEPTED' || code === 'QUOTE_DECLINED') {
+          d.status = code === 'QUOTE_EXPIRED' ? 'expired' : code === 'QUOTE_DECLINED' ? 'declined' : 'accepted';
+          render();
+        }
+      })
+      .catch(function () { err.className = 'err'; err.textContent = 'Couldn\'t accept right now. Check your connection and try again.'; })
+      .then(function () { var b2 = document.getElementById('accept'); if (b2) b2.disabled = false; });
+  }
+
+  // ── Formatting ──────────────────────────────────────────────────────────────
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function money(n, d) {
+    var currency = /^[A-Z]{3}$/.test(d.currency || '') ? d.currency : (d.country === 'United States' || d.country === 'US' ? 'USD' : 'CAD');
+    try { return new Intl.NumberFormat(currency === 'USD' ? 'en-US' : 'en-CA', { style: 'currency', currency: currency }).format(Number(n) || 0); }
+    catch (e) { return '$' + (Number(n) || 0).toFixed(2); }
+  }
+  // "November 1, 2026" from a timestamp or a YYYY-MM-DD day (read as a calendar day, not UTC midnight)
+  function day(v) {
+    var s = String(v || '');
+    var dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+    var dt = dm ? new Date(Number(dm[1]), Number(dm[2]) - 1, Number(dm[3])) : new Date(s);
+    if (isNaN(dt.getTime())) return s;
+    return dt.toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' });
+  }
+})();
+</script>
+</body>
+</html>
