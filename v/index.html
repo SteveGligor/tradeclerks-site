@@ -14,8 +14,9 @@
 <link rel="stylesheet" href="/style.css">
 <style>
   /* The customer page (Trade Clerks app, scheduler plan PR 3): one invoice or quote, read from
-     the token in the fragment (#i=… / #q=…). The script asks the app's server for the document
-     and renders it here; this host never receives the token. Business first, one navy button. */
+     the token in the fragment (#i=… / #q=…). The script POSTs the token to the app's server for
+     the document and renders it here; this host never receives the token and no URL carries it.
+     Business first, one navy button. */
   .page { max-width: 640px; margin: 24px auto 0; padding: 0 16px; }
   .card { background: #fff; border-radius: 14px; box-shadow: 0 1px 3px rgba(27, 42, 74, 0.08); padding: 24px 20px; margin-bottom: 16px; }
   @media (min-width: 700px) { .card { padding: 32px 36px; } }
@@ -85,7 +86,8 @@
   var token = m[2];
   var state = { doc: null, biz: null, hasPdf: false, option: null, ticked: {} };
 
-  fetch(API + '?' + m[1] + '=' + token, { cache: 'no-store' })
+  // The token goes in a POST body, never in the URL, so no request log keeps it
+  post({ token: token, action: 'page' })
     .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, body: j }; }); })
     .then(function (r) {
       if (!r.ok || !r.body || !r.body.page) {
@@ -103,6 +105,10 @@
       render();
     })
     .catch(function () { show(couldntLoad()); });
+
+  function post(body) {
+    return fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store', body: JSON.stringify(body) });
+  }
 
   // ── Rendering ────────────────────────────────────────────────────────────────
 
@@ -163,7 +169,9 @@
     if (d.title) h += '<h2>Quote for</h2><p>' + esc(d.title) + '</p>';
     var opts = d.options || [];
     var multi = opts.length > 1;
-    if (multi) {
+    if (declined) {
+      // The server sends a declined (or revised) quote with its number and status only
+    } else if (multi) {
       h += '<h2>Options</h2><div class="tabs" role="tablist">' + opts.map(function (o) {
         return '<button type="button" role="tab" data-option="' + esc(o.id) + '" aria-selected="' + (o.id === state.option) + '"' + (open ? '' : ' disabled') + '>' + esc(o.name) + '</button>';
       }).join('') + '</div>';
@@ -171,8 +179,10 @@
       h += '<h2>Details</h2>';
     }
     var lines = (d.lines || []).filter(function (l) { return multi ? l.option_id === state.option : true; });
-    h += linesTable(lines, d, open);
-    h += '<p class="total" id="quote-total">' + money(quoteTotal(d, lines), d) + '<small>' + (d.tax_label ? 'incl. ' + esc(d.tax_label) : 'Total') + '</small></p>';
+    if (!declined) {
+      h += linesTable(lines, d, open);
+      h += '<p class="total" id="quote-total">' + money(quoteTotal(d, lines), d) + '<small>' + (d.tax_label ? 'incl. ' + esc(d.tax_label) : 'Total') + '</small></p>';
+    }
     if ((d.included || []).length) h += '<h2>Included</h2><ul class="plain">' + d.included.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>';
     if ((d.not_included || []).length) h += '<h2>Not included</h2><ul class="plain">' + d.not_included.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>';
     if (d.note_to_customer) h += '<h2>A note from ' + esc(b.name || 'your contractor') + '</h2><div class="note">' + esc(d.note_to_customer) + '</div>';
@@ -185,7 +195,7 @@
     } else if (expired) {
       h += '<p class="done">This quote has expired. Contact ' + esc(b.name || 'your contractor') + ' for a new one.</p>';
     } else if (declined) {
-      h += '<p class="done">This quote is no longer open.</p>';
+      h += '<p class="done">This quote is no longer open. Contact ' + esc(b.name || 'your contractor') + ' for a new one.</p>';
     } else if (d.status !== 'draft') {
       h += '<h2>Accept this quote</h2>'
         + '<div class="field"><label for="name">Your name</label><input id="name" type="text" autocomplete="name" maxlength="100" placeholder="Type your full name"></div>'
@@ -264,7 +274,7 @@
   function downloadPdf() {
     var btn = document.getElementById('pdf'), err = document.getElementById('pdf-err');
     btn.disabled = true; err.className = 'err sr'; err.textContent = '';
-    fetch(API + '?' + m[1] + '=' + token + '&pdf=1', { cache: 'no-store' })
+    post({ token: token, action: 'pdf' })
       .then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.blob(); })
       .then(function (blob) {
         var url = URL.createObjectURL(blob);
@@ -290,8 +300,7 @@
       return line && (!multi || line.option_id === state.option);
     });
     btn.disabled = true;
-    fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store',
-      body: JSON.stringify({ token: token, option_id: multi ? state.option : null, optional_ids: ids, name: name }) })
+    post({ token: token, action: 'accept', option_id: multi ? state.option : null, optional_ids: ids, name: name })
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, body: j || {} }; }); })
       .then(function (r) {
         if (r.ok) {
