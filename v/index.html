@@ -242,7 +242,9 @@
 
   // rate % of an amount in cents, to the cent, a half cent up. The rate is read as the decimal
   // it prints as (9.975 is 9975 / 1000), and the cents are split so no product leaves the range
-  // a number holds exactly.
+  // a number holds exactly. For amounts of zero or more only: the split is wrong below zero.
+  // A quote line's total is never negative (the database's quote_items_total_check) and
+  // taxRates never passes a negative rate; a discount line would need this reworked first.
   function taxCents(cents, rate) {
     var m = /^(\d+)(?:\.(\d+))?$/.exec(String(rate));
     // Not a plain rate of up to five decimals (the server keeps three): the nearest answer
