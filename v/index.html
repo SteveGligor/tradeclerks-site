@@ -228,14 +228,56 @@
       + '<li class="grand"><span>Total</span><span>' + money(d.total, d) + '</span></li></ul>';
   }
 
+  // @quote-total begin
   // The quote's total as the customer has it set: the required lines of the shown option plus
-  // the optional lines ticked, with tax at the quote's rate. The accepted quote shows its stored total.
+  // the optional lines ticked, then each tax row on that subtotal, rounded to the cent on its
+  // own (an exact half cent up), then added. The same working-out as the server's quote_tax()
+  // and the app's lib/money.ts, so the total shown here is the total the customer accepts.
+  // All in whole numbers: a decimal like 2.405 isn't exact in a JavaScript number, and rounding
+  // it there drops some half cents. Plain numbers (no BigInt), for older phones.
+  // tests/quote-total.test.mjs runs the functions between the two marks as written here.
+
+  // An amount the server sent (already to the cent) as whole cents
+  function toCents(n) { return Math.round((Number(n) || 0) * 100); }
+
+  // rate % of an amount in cents, to the cent, a half cent up. The rate is read as the decimal
+  // it prints as (9.975 is 9975 / 1000), and the cents are split so no product leaves the range
+  // a number holds exactly.
+  function taxCents(cents, rate) {
+    var m = /^(\d+)(?:\.(\d+))?$/.exec(String(rate));
+    // Not a plain rate of up to five decimals (the server keeps three): the nearest answer
+    if (!m || (m[2] || '').length > 5) return Math.round(cents * (Number(rate) || 0) / 100);
+    var digits = Number(m[1] + (m[2] || ''));
+    var divisor = 100 * Math.pow(10, (m[2] || '').length);
+    var whole = Math.floor(cents / divisor), rest = cents % divisor;
+    return whole * digits + Math.floor((rest * digits + divisor / 2) / divisor);
+  }
+
+  // The tax rates to use, as quote_tax() chooses them: the quote's own rows when every one has
+  // a rate from 0 to 100, otherwise its combined rate
+  function taxRates(d) {
+    var rows = d.tax_lines;
+    var usable = Array.isArray(rows) && rows.length > 0 && rows.every(function (t) {
+      return t && typeof t === 'object' && typeof t.rate === 'number' && t.rate >= 0 && t.rate <= 100;
+    });
+    if (usable) return rows.map(function (t) { return t.rate; });
+    var rate = Number(d.tax_rate) || 0;
+    return rate > 0 ? [rate] : [];
+  }
+
+  function quoteTotalFor(d, lines, ticked) {
+    var sub = 0;
+    lines.forEach(function (l) { if (!l.optional || ticked[l.id]) sub += toCents(l.total); });
+    var total = sub;
+    taxRates(d).forEach(function (rate) { total += taxCents(sub, rate); });
+    return total / 100;
+  }
+  // @quote-total end
+
+  // The accepted quote shows its stored total.
   function quoteTotal(d, lines) {
     if (d.status === 'accepted' || d.status === 'converted') return d.total;
-    var sub = 0;
-    lines.forEach(function (l) { if (!l.optional || state.ticked[l.id]) sub += Number(l.total) || 0; });
-    var tax = Math.round(sub * (Number(d.tax_rate) || 0)) / 100;
-    return Math.round((sub + tax) * 100) / 100;
+    return quoteTotalFor(d, lines, state.ticked);
   }
 
   function actions(b, kind) {
