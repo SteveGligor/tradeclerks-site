@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trade Clerks</title>
+<!--
+  Where Google sends a tech back after "Connect Google Calendar" in the Trade Clerks app
+  (https://tradeclerks.com/connect/google). Google accepts a return address only on a domain
+  verified for the project, so this page does one thing: it hands the same query to the app's
+  server, which finishes the connection and sends the browser back into the app. Nothing is
+  read, stored or shown here, and the address it forwards to is fixed below.
+-->
+<script>
+  location.replace('https://dwlmuxmfbnodombqxida.supabase.co/functions/v1/google-calendar-auth/callback' + location.search);
+</script>
+</head>
+<body>
+<noscript>Turn on JavaScript, then go back to the Trade Clerks app and tap Connect Google Calendar again.</noscript>
+</body>
+</html>
