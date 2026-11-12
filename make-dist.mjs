@@ -6,8 +6,8 @@
 // A file is published only if it is named in PUBLISHED. Everything else in the repo is
 // named in NOT_PUBLISHED, and tests/published-files.test.mjs fails when a file is in
 // neither list, so a new file is never published, or left out, by accident.
-import { cpSync, existsSync, mkdirSync, realpathSync, rmSync, statSync } from 'node:fs';
-import { dirname, join, resolve, sep } from 'node:path';
+import { cpSync, existsSync, mkdirSync, readdirSync, realpathSync, rmSync, statSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = realpathSync(dirname(fileURLToPath(import.meta.url)));
@@ -42,16 +42,16 @@ export const NOT_PUBLISHED = [
   'tests/',
 ];
 
-// The folder is emptied first, so it may only be dist/ itself or a folder outside the repo
-// (the test's temporary one): never the repo, a folder that holds it, or a folder inside it.
+// The only folder this ever deletes is the repo's own dist/, a fixed path. Asked to write
+// anywhere else (the test's temporary folder), it deletes nothing and refuses a folder that
+// already has something in it.
 export function makeDist(outDir = DIST) {
   const out = resolve(outDir);
-  const holdsRepo = out === ROOT || ROOT.startsWith(out.endsWith(sep) ? out : out + sep);
-  const insideRepo = out.startsWith(ROOT + sep);
-  if (holdsRepo || (insideRepo && out !== DIST)) {
-    throw new Error(`make-dist: refusing to write to ${out}`);
+  if (out === DIST) {
+    rmSync(DIST, { recursive: true, force: true });
+  } else if (existsSync(out) && readdirSync(out).length > 0) {
+    throw new Error(`make-dist: ${out} is not empty, and only dist/ is ever emptied`);
   }
-  rmSync(out, { recursive: true, force: true });
   for (const file of PUBLISHED) {
     const from = join(ROOT, file);
     if (!existsSync(from) || !statSync(from).isFile()) {

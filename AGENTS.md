@@ -57,8 +57,8 @@ findings numbered in the description with what was done about each.
   be on GitHub's copy and missing from Cloudflare's.
 - **The move's pause (2026-11-12, removed with `_config.yml` at the move's last step):** from
   the day Steve connects this repo to Cloudflare until `tradeclerks.com` is switched over, **no
-  pull request is merged here**, whatever it is, so the site checked on Cloudflare is the site
-  that's switched. A pull request may be opened and reviewed in that time; its merge step waits.
+  pull request is merged here**, so the site checked on Cloudflare is the site that's switched.
+  The one exception is a fix to the move itself, after which the whole site check is run again. A pull request may be opened and reviewed in that time; its merge step waits.
   Ask Steve where the move stands before putting a merge on a card.
 - While GitHub Pages is still set up (until the move's last step), `_config.yml` keeps the same
   working files out of GitHub's copy, and no pull request changes how the site is built.

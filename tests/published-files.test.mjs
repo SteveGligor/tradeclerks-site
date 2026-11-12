@@ -2,7 +2,7 @@
 // else in the repo. Run: node --test tests/published-files.test.mjs
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
@@ -47,7 +47,9 @@ function repoFiles() {
 function githubExcludes(config) {
   const names = [];
   let inExclude = false;
-  for (const line of config.split('\n')) {
+  for (const raw of config.split('\n')) {
+    if (/^\s*#/.test(raw)) continue; // a comment line, wherever it sits, ends nothing
+    const line = raw.replace(/\s+#.*$/, '');
     if (/^\S/.test(line)) inExclude = /^exclude:\s*$/.test(line);
     else if (inExclude) {
       const name = /^\s+-\s+(\S+)\s*$/.exec(line)?.[1];
@@ -125,14 +127,21 @@ test("Cloudflare's settings: plain files from dist, same addresses, a real 404, 
   assert.match(settings.compatibility_date, /^\d{4}-\d{2}-\d{2}$/);
 });
 
-test('make-dist only ever empties dist/ or a folder outside the repo', () => {
-  for (const bad of [ROOT, join(ROOT, '..'), '/', join(ROOT, 'v'), join(ROOT, 'tests'), join(ROOT, 'dist', 'inner'), join(ROOT, 'content', 'x')]) {
-    assert.throws(() => makeDist(bad), /refusing to write/, `makeDist(${bad}) should refuse`);
+test('make-dist deletes nothing outside dist/: a folder with something in it is refused, untouched', () => {
+  // Only ever a temporary folder made here: a folder that matters is never handed to makeDist.
+  const out = mkdtempSync(join(tmpdir(), 'tradeclerks-dist-'));
+  try {
+    writeFileSync(join(out, 'keep.txt'), 'keep');
+    assert.throws(() => makeDist(out), /only dist\/ is ever emptied/);
+    assert.deepEqual(filesUnder(out), ['keep.txt']);
+    assert.equal(readFileSync(join(out, 'keep.txt'), 'utf8'), 'keep');
+  } finally {
+    rmSync(out, { recursive: true, force: true });
   }
 });
 
 test('the githubExcludes reader takes the exclude list and no other', () => {
-  assert.deepEqual(githubExcludes('# c\ninclude:\n  - .well-known\nexclude:\n  - a\n  - b\nother: 1\n'), ['a', 'b']);
+  assert.deepEqual(githubExcludes('# c\ninclude:\n  - .well-known\nexclude:\n  - a\n# at the margin\n  - b # why\n  # indented\n  - c\nother:\n  - d\n'), ['a', 'b', 'c']);
 });
 
 test('no file of headers or redirects is published', () => {
