@@ -1,14 +1,17 @@
 // Copies the published files, and only those, into dist/, which is what Cloudflare serves
-// (wrangler.jsonc). Run by Cloudflare's build as `node make-dist.mjs`; no packages.
+// (wrangler.jsonc). No packages. Cloudflare's build command, set in its dashboard, is
+//   node --test tests/published-files.test.mjs && node make-dist.mjs
+// so a file that is in neither list below fails the build, and the last good site stays up.
 //
 // A file is published only if it is named in PUBLISHED. Everything else in the repo is
 // named in NOT_PUBLISHED, and tests/published-files.test.mjs fails when a file is in
 // neither list, so a new file is never published, or left out, by accident.
-import { cpSync, existsSync, mkdirSync, rmSync, statSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { cpSync, existsSync, mkdirSync, realpathSync, rmSync, statSync } from 'node:fs';
+import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = dirname(fileURLToPath(import.meta.url));
+const ROOT = realpathSync(dirname(fileURLToPath(import.meta.url)));
+const DIST = join(ROOT, 'dist');
 
 // The site, file by file. Paths from the repo's root, served at the same path.
 export const PUBLISHED = [
@@ -27,6 +30,7 @@ export const PUBLISHED = [
 // GitHub Pages is told the same in _config.yml for as long as it is still set up.
 export const NOT_PUBLISHED = [
   'AGENTS.md',
+  'CLAUDE.md',
   'README.md',
   'build.py',
   'make-dist.mjs',
@@ -38,9 +42,13 @@ export const NOT_PUBLISHED = [
   'tests/',
 ];
 
-export function makeDist(outDir = join(ROOT, 'dist')) {
+// The folder is emptied first, so it may only be dist/ itself or a folder outside the repo
+// (the test's temporary one): never the repo, a folder that holds it, or a folder inside it.
+export function makeDist(outDir = DIST) {
   const out = resolve(outDir);
-  if (out === ROOT || ROOT.startsWith(out + '/')) {
+  const holdsRepo = out === ROOT || ROOT.startsWith(out.endsWith(sep) ? out : out + sep);
+  const insideRepo = out.startsWith(ROOT + sep);
+  if (holdsRepo || (insideRepo && out !== DIST)) {
     throw new Error(`make-dist: refusing to write to ${out}`);
   }
   rmSync(out, { recursive: true, force: true });
@@ -56,7 +64,17 @@ export function makeDist(outDir = join(ROOT, 'dist')) {
   return out;
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+// Run as a command (`node make-dist.mjs`), not imported by the test. Real paths on both
+// sides, so a path through a link still runs it rather than doing nothing without a word.
+const runAsCommand = (() => {
+  try {
+    return Boolean(process.argv[1]) && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+})();
+
+if (runAsCommand) {
   const out = makeDist();
   console.log(`make-dist: ${PUBLISHED.length} files copied to ${out}`);
 }

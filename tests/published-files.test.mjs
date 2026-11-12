@@ -1,6 +1,7 @@
 // What Cloudflare serves is exactly the files make-dist.mjs names, unchanged, and nothing
 // else in the repo. Run: node --test tests/published-files.test.mjs
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -27,6 +28,35 @@ function filesUnder(dir, skip = []) {
   return found.sort();
 }
 
+// The repo's files as git sees them: committed, or new and not ignored. A file the Mac
+// leaves behind and .gitignore names (.DS_Store) is not one of them. Without git (a copy
+// of the folder with no .git), every file in the folder is looked at instead.
+function repoFiles() {
+  try {
+    const out = execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const files = out.split('\0').filter(Boolean).sort();
+    if (files.length > 0) return files;
+  } catch {
+    // fall through to the folder itself
+  }
+  return filesUnder(ROOT, LOCAL_ONLY);
+}
+
+// The names under `exclude:` in _config.yml, and only those: a list under another key
+// (an `include:` list, say) is not read as an exclude.
+function githubExcludes(config) {
+  const names = [];
+  let inExclude = false;
+  for (const line of config.split('\n')) {
+    if (/^\S/.test(line)) inExclude = /^exclude:\s*$/.test(line);
+    else if (inExclude) {
+      const name = /^\s+-\s+(\S+)\s*$/.exec(line)?.[1];
+      if (name) names.push(name);
+    }
+  }
+  return names;
+}
+
 const notPublished = (file) =>
   NOT_PUBLISHED.some((name) => (name.endsWith('/') ? file.startsWith(name) : file === name));
 
@@ -44,7 +74,9 @@ test('dist holds the published files and nothing else, byte for byte', () => {
 });
 
 test('every file in the repo is named as published or as not published, never both', () => {
-  for (const file of filesUnder(ROOT, LOCAL_ONLY)) {
+  const files = repoFiles();
+  assert.ok(files.includes('make-dist.mjs'), 'the list of the repo\'s files is wrong');
+  for (const file of files) {
     const isPublished = PUBLISHED.includes(file);
     assert.ok(isPublished || notPublished(file), `${file} is in neither list in make-dist.mjs: say whether the site serves it`);
     assert.ok(!(isPublished && notPublished(file)), `${file} is in both lists in make-dist.mjs`);
@@ -62,8 +94,8 @@ test('the addresses already in use are still published', () => {
 });
 
 test('GitHub Pages leaves out the same working files, while it is still set up', () => {
-  const config = readFileSync(join(ROOT, '_config.yml'), 'utf8');
-  const excluded = config.split('\n').map((line) => /^\s+-\s+(\S+)\s*$/.exec(line)?.[1]).filter(Boolean);
+  const excluded = githubExcludes(readFileSync(join(ROOT, '_config.yml'), 'utf8'));
+  assert.ok(excluded.includes('README.md'), "couldn't read the exclude list in _config.yml");
   for (const name of NOT_PUBLISHED) {
     const top = name.replace(/\/$/, '');
     // GitHub's builder skips names starting with "." or "_" by itself.
@@ -73,6 +105,9 @@ test('GitHub Pages leaves out the same working files, while it is still set up',
   // Its excludes match as prefixes: none of them may swallow a published file.
   for (const file of PUBLISHED) {
     assert.ok(!excluded.some((name) => file.startsWith(name)), `_config.yml would exclude ${file}`);
+    // GitHub's builder skips a file or folder whose name starts with "." or "_". S2's
+    // Password AutoFill file lives in .well-known/, which GitHub would skip and Cloudflare
+    // serves: when it arrives, this is the line to loosen, for that one path, on purpose.
     assert.ok(!file.split('/').some((part) => /^[._]/.test(part)), `GitHub Pages would skip ${file}`);
   }
 });
@@ -88,6 +123,16 @@ test("Cloudflare's settings: plain files from dist, same addresses, a real 404, 
     assets: { directory: './dist', html_handling: 'auto-trailing-slash', not_found_handling: 'none' },
   });
   assert.match(settings.compatibility_date, /^\d{4}-\d{2}-\d{2}$/);
+});
+
+test('make-dist only ever empties dist/ or a folder outside the repo', () => {
+  for (const bad of [ROOT, join(ROOT, '..'), '/', join(ROOT, 'v'), join(ROOT, 'tests'), join(ROOT, 'dist', 'inner'), join(ROOT, 'content', 'x')]) {
+    assert.throws(() => makeDist(bad), /refusing to write/, `makeDist(${bad}) should refuse`);
+  }
+});
+
+test('the githubExcludes reader takes the exclude list and no other', () => {
+  assert.deepEqual(githubExcludes('# c\ninclude:\n  - .well-known\nexclude:\n  - a\n  - b\nother: 1\n'), ['a', 'b']);
 });
 
 test('no file of headers or redirects is published', () => {

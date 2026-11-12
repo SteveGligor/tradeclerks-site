@@ -15,5 +15,6 @@ exclude:
   - CNAME
   - tests
   - AGENTS.md
+  - CLAUDE.md
   - make-dist.mjs
   - wrangler.jsonc
