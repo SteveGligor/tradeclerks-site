@@ -1,0 +1,38 @@
+// Cloudflare's settings for serving this site (website plan, site PR S1: the move).
+// The site is plain files and nothing else: there is no "main", so no code of ours runs
+// on Cloudflare. tests/published-files.test.mjs holds this file to the values below.
+//
+// Two commands are set in Cloudflare's dashboard (Settings > Build), not here, because
+// Cloudflare's build doesn't read a build command from this file:
+//   Build command:   node --test tests/published-files.test.mjs && node make-dist.mjs
+//   Deploy command:  npx wrangler@4.161.0 deploy
+// The first copies the published files, and only those, into dist/, and fails the build if
+// a file is in neither of make-dist.mjs's lists. The second names the version of
+// Cloudflare's tool this file was checked with; without the number the build would fetch
+// whatever is newest that minute. The number changes only in a reviewed pull request that
+// changes it here too.
+{
+  // The same as the site's name in the Cloudflare dashboard.
+  "name": "tradeclerks-site",
+  "compatibility_date": "2026-11-12",
+  // The site's default Cloudflare address. On for the move, so the pages can be checked
+  // there before tradeclerks.com is switched; the move's last step turns it off, here and
+  // in the dashboard together (a deploy turns it back on if only the dashboard says off).
+  "workers_dev": true,
+  // No preview address per branch yet: they are public unless a sign-in is put in front of
+  // them, so they go on, behind Cloudflare Access, in their own step. This line takes
+  // effect only once main has been deployed with it. Until that step, "Enable Preview
+  // Builds" (Settings > Build > Branch control) stays unticked in the dashboard as well:
+  // ticked, every push to a branch runs a preview build, and with no "previews" block here
+  // that build fails on every pull request.
+  "preview_urls": false,
+  "assets": {
+    "directory": "./dist",
+    // The addresses GitHub Pages gave, kept: /terms is terms.html, /v/ is v/index.html,
+    // /connect/google is connect/google.html with no redirect.
+    "html_handling": "auto-trailing-slash",
+    // An address with no file answers 404. Never the home page: every address that is not a
+    // published file has to say "not found", the repo's working files included.
+    "not_found_handling": "none"
+  }
+}

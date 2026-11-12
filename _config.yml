@@ -5,9 +5,16 @@
 # own default exclude, which a custom list replaces, so it's listed again.
 # Entries match as prefixes: a new root file starting with one of these names
 # won't be published either.
+# Cloudflare is told the same by make-dist.mjs (its NOT_PUBLISHED list), and
+# tests/published-files.test.mjs fails if the two disagree. This file goes when
+# GitHub Pages is turned off (the move's last step).
 exclude:
   - README.md
   - build.py
   - content
   - CNAME
   - tests
+  - AGENTS.md
+  - CLAUDE.md
+  - make-dist.mjs
+  - wrangler.jsonc
