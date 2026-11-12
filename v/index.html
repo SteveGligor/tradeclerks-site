@@ -16,7 +16,16 @@
   /* The customer page (Trade Clerks app, scheduler plan PR 3): one invoice or quote, read from
      the token in the fragment (#i=… / #q=…). The script POSTs the token to the app's server for
      the document and renders it here; this host never receives the token and no URL carries it.
-     Business first, one navy button. */
+     Business first, one navy button.
+     Card payments PR 1: an invoice the tech takes cards on shows "Pay by card" under "How to
+     pay"; the button asks the server for a Stripe Checkout page and goes there. #i=…&pay=1 (the
+     email's button) goes straight to Checkout. Checkout comes back to ?paid=1 or ?cancelled=1
+     with the fragment; the token is also kept in sessionStorage before leaving, in case the
+     fragment doesn't survive the trip. The page never marks anything paid itself: it shows paid
+     only when the server says so (Stripe's webhook). */
+  .paycard { margin-top: 16px; }
+  .paycard .btn { width: 100%; text-align: center; }
+  @media (min-width: 700px) { .paycard .btn { width: auto; } }
   .page { max-width: 640px; margin: 24px auto 0; padding: 0 16px; }
   .card { background: #fff; border-radius: 14px; box-shadow: 0 1px 3px rgba(27, 42, 74, 0.08); padding: 24px 20px; margin-bottom: 16px; }
   @media (min-width: 700px) { .card { padding: 32px 36px; } }
@@ -69,7 +78,7 @@
 <main class="page" id="page">
   <div class="card center" id="loading">Loading…</div>
 </main>
-<footer class="foot">Sent with <a href="https://tradeclerks.com">Trade Clerks</a></footer>
+<footer class="foot"><span id="stripe-line"></span>Sent with <a href="https://tradeclerks.com">Trade Clerks</a></footer>
 
 <script>
 (function () {
@@ -79,12 +88,30 @@
 
   var page = document.getElementById('page');
 
-  // #i=<token> (invoice) or #q=<token> (quote): 64 hex characters, never sent to this host
-  var m = /^#(i|q)=([0-9a-f]{64})$/.exec(location.hash || '');
-  if (!m) { show(notValid()); return; }
+  // #i=<token> (invoice) or #q=<token> (quote): 64 hex characters, never sent to this host.
+  // An invoice link may end in &pay=1 (straight to card payment). Back from Stripe Checkout the
+  // address also carries ?paid=1 or ?cancelled=1.
+  var query = location.search || '';
+  var returned = /[?&]paid=1(&|$)/.test(query) ? 'paid' : /[?&]cancelled=1(&|$)/.test(query) ? 'cancelled' : null;
+  var m = /^#(i|q)=([0-9a-f]{64})(&pay=1)?$/.exec(location.hash || '');
+  if (!m && returned) {
+    var kept = null;
+    try { kept = sessionStorage.getItem('tc-pay-token'); } catch (e) {}
+    if (kept && /^[0-9a-f]{64}$/.test(kept)) m = ['', 'i', kept, ''];
+  }
+  if (!m) {
+    // Back from Stripe with no way to tell which invoice (the fragment dropped and nothing kept)
+    show(returned === 'paid'
+      ? '<div class="card center">Your payment is being confirmed. Open the link in your email to see the invoice.</div>'
+      : notValid());
+    return;
+  }
   var kind = m[1] === 'i' ? 'invoice' : 'quote';
   var token = m[2];
-  var state = { doc: null, biz: null, hasPdf: false, option: null, ticked: {} };
+  var autoPay = kind === 'invoice' && m[3] === '&pay=1' && !returned;
+  // Tidy the address: no ?paid / &pay left to repeat on a reload
+  try { history.replaceState(null, '', location.pathname + '#' + m[1] + '=' + token); } catch (e) {}
+  var state = { doc: null, biz: null, hasPdf: false, option: null, ticked: {}, card: null, paying: false, confirming: returned === 'paid', confirmTries: 0 };
 
   // The token goes in a POST body, never in the URL, so no request log keeps it
   post({ token: token, action: 'page' })
@@ -97,12 +124,15 @@
       state.doc = r.body.page.document || {};
       state.biz = r.body.page.business || {};
       state.hasPdf = !!r.body.page.has_pdf;
+      state.card = r.body.card || null;
       if (state.doc.kind === 'quote') {
         var opts = state.doc.options || [];
         state.option = state.doc.accepted_option_id || (opts.length ? opts[0].id : null);
         (state.doc.accepted_optional_item_ids || []).forEach(function (id) { state.ticked[id] = true; });
       }
       render();
+      if (autoPay && state.card && state.card.offer && state.doc.status !== 'paid') { autoPay = false; startPay(); }
+      if (state.confirming) waitForPayment();
     })
     .catch(function () { show(couldntLoad()); });
 
@@ -134,7 +164,8 @@
 
   function invoiceCard(d, b) {
     var paid = d.status === 'paid';
-    var status = paid ? 'Paid' + (d.paid_at ? ' ' + day(d.paid_at) : '') : (d.due_date ? 'Due ' + day(d.due_date) : 'Sent');
+    var card = state.card || {};
+    var status = paid ? 'Paid' + (d.paid_at ? ' ' + day(d.paid_at) : '') + (card.paid_by_card ? ' · by card' : '') : (d.due_date ? 'Due ' + day(d.due_date) : 'Sent');
     var h = '<div class="card">'
       + '<div class="kind">Invoice' + (d.bill_to_name ? ' for ' + esc(d.bill_to_name) : '') + '</div>'
       + '<p class="number">#' + esc(d.number || '') + '</p>'
@@ -148,6 +179,7 @@
     h += '<h2>Details</h2>' + linesTable(d.lines || [], d, false);
     h += sums(d);
     if (!paid && Number(d.total) > 0 && b.payment_instructions) h += '<h2>How to pay</h2><div class="pay">' + esc(b.payment_instructions) + '</div>';
+    h += payBlock(d, b, paid);
     h += actions(b, 'invoice');
     if (b.review_url && /^https:\/\/(g\.page|maps\.app\.goo\.gl|goo\.gl|(www\.|search\.|maps\.|business\.)?google\.[a-z]{2,3}(\.[a-z]{2})?)\//.test(b.review_url)) {
       h += '<p class="hint">Happy with the work? <a href="' + esc(b.review_url) + '" rel="noopener">Leave ' + esc(b.name || 'us') + ' a Google review</a></p>';
@@ -289,6 +321,26 @@
     return h + '</div><div class="err sr" id="pdf-err"></div>';
   }
 
+  // Pay by card: the button while the server offers it; "Confirming your payment…" after Checkout
+  // until the webhook has written it
+  function payBlock(d, b, paid) {
+    var card = state.card || {};
+    if (paid) return '';
+    // "Confirming…" only while the server has a Checkout open for this invoice (one the customer
+    // could just have paid); "went through at Stripe" only after the full wait with it still open
+    if (state.confirming && card.open_checkout) {
+      return '<div class="paycard"><p class="done" id="pay-msg">' + (state.confirmTries >= 8
+        ? 'Your payment went through at Stripe; this page will show it shortly.'
+        : 'Confirming your payment…') + '</p></div>';
+    }
+    if (!card.offer) return '';
+    return '<div class="paycard">'
+      + (b.payment_instructions ? '' : '<h2>Pay</h2>')
+      + '<button type="button" class="btn primary" id="paycard"' + (state.paying ? ' disabled' : '') + '>' + (state.paying ? 'Opening secure payment…' : 'Pay by card') + '</button>'
+      + '<p class="hint">Apple Pay and Google Pay work too.</p>'
+      + '<div class="err sr" id="pay-err"></div></div>';
+  }
+
   function notValid() { return '<div class="card center">This link isn\'t valid.</div>'; }
   function couldntLoad() { return '<div class="card center">Couldn\'t load this page right now. Try again in a moment.</div>'; }
   function show(html) { page.innerHTML = html; }
@@ -296,6 +348,11 @@
   // ── Behaviour ───────────────────────────────────────────────────────────────
 
   function wire() {
+    var payBtn = document.getElementById('paycard');
+    if (payBtn) payBtn.addEventListener('click', startPay);
+    var line = document.getElementById('stripe-line');
+    if (line) line.textContent = state.card && (state.card.offer || state.card.paid_by_card)
+      ? 'Card payments are processed by Stripe for ' + (state.biz && state.biz.name ? state.biz.name : 'this business') + '. ' : '';
     page.querySelectorAll('[data-option]').forEach(function (btn) {
       btn.addEventListener('click', function () { state.option = btn.getAttribute('data-option'); render(); });
     });
@@ -368,6 +425,66 @@
       })
       .catch(function () { err.className = 'err'; err.textContent = 'Couldn\'t accept right now. Check your connection and try again.'; })
       .then(function () { var b2 = document.getElementById('accept'); if (b2) b2.disabled = false; });
+  }
+
+  // ── Paying by card ──────────────────────────────────────────────────────────
+
+  function startPay() {
+    if (state.paying) return;
+    state.paying = true;
+    render();
+    try { sessionStorage.setItem('tc-pay-token', token); } catch (e) {}
+    post({ token: token, action: 'pay' })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, body: j || {} }; }); })
+      .then(function (r) {
+        if (r.ok && typeof r.body.url === 'string' && r.body.url.indexOf('https://checkout.stripe.com/') === 0) {
+          location.assign(r.body.url);
+          return;
+        }
+        state.paying = false;
+        if (r.status === 409 && r.body.error === 'PAY_NOT_OFFERED') {
+          if (r.body.reason === 'paid' || r.body.reason === 'paid_by_card') { reload(); return; }
+          state.card = { offer: false };
+          render();
+          payError('Card payment isn\'t available for this invoice. Ask ' + (state.biz.name || 'your contractor') + ' how to pay.');
+          return;
+        }
+        render();
+        payError(r.status === 429 ? 'Too many tries. Wait a minute, then try again.' : 'Couldn\'t open card payment right now. Try again in a moment.');
+      })
+      .catch(function () { state.paying = false; render(); payError('Couldn\'t open card payment right now. Check your connection and try again.'); });
+  }
+
+  function payError(text) {
+    var el = document.getElementById('pay-err') || document.getElementById('pdf-err');
+    if (el) { el.className = 'err'; el.textContent = text; }
+  }
+
+  // After Checkout: ask again every 7 seconds, 8 times (the server allows 10 reads a minute per
+  // link). 'poll' answers like 'page' without counting a view.
+  function waitForPayment() {
+    if (state.doc && state.doc.status === 'paid') { state.confirming = false; render(); return; }
+    if (!state.card || !state.card.open_checkout) { state.confirming = false; render(); return; }
+    if (state.confirmTries >= 8) { render(); return; }
+    setTimeout(function () {
+      state.confirmTries++;
+      reload(waitForPayment);
+    }, 7000);
+  }
+
+  function reload(then) {
+    post({ token: token, action: 'poll' })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (j && j.page) {
+          state.doc = j.page.document || state.doc;
+          state.card = j.card || null;
+          if (state.doc.status === 'paid') state.confirming = false;
+          render();
+        }
+      })
+      .catch(function () {})
+      .then(function () { if (then) then(); });
   }
 
   // ── Formatting ──────────────────────────────────────────────────────────────

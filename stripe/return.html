@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trade Clerks</title>
+<!--
+  Where Stripe sends a tech's browser when they finish (or leave) Stripe's hosted set-up from Business profile → Card payments in the Trade Clerks app (card payments plan PR 1, https://tradeclerks.com/stripe/return). It reads, stores and shows nothing about the tech; the app re-reads the account at Stripe when it comes back to the front.
+  Named return.html, not return/index.html, so GitHub Pages serves it with no trailing-slash redirect.
+-->
+<link rel="icon" href="/logo.png">
+<link rel="stylesheet" href="/style.css">
+<style>
+  .box { max-width: 480px; margin: 48px auto; padding: 32px 24px; background: #fff; border-radius: 14px; box-shadow: 0 1px 3px rgba(27, 42, 74, 0.08); }
+  .box h1 { font-size: 22px; margin: 0 0 12px; }
+  .box p { color: var(--grey); line-height: 1.6; margin: 0; }
+</style>
+</head>
+<body>
+<main class="box">
+  <h1>You’re back from Stripe</h1>
+  <p>Tap <strong>Done</strong> at the top to go back to Trade Clerks. Business profile → Card payments shows <strong>On</strong> once Stripe has checked your details (usually a minute or two).</p>
+</main>
+</body>
+</html>
