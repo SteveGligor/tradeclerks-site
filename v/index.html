@@ -168,8 +168,10 @@
   function invoiceCard(d, b) {
     var paid = d.status === 'paid';
     var card = state.card || {};
-    // The invoice's own card payment went back to the customer (the server's word, never the page's)
-    var refunded = paid && card.refunded === true;
+    // The invoice's own card payment went back to the customer (the server's word, never the
+    // page's), and no other card payment stands on it: a customer who paid twice and got one
+    // payment back has paid, and reads plain "Paid" (the server's reason is then paid_by_card)
+    var refunded = paid && card.refunded === true && card.reason !== 'paid_by_card';
     var status = paid ? 'Paid' + (d.paid_at ? ' ' + day(d.paid_at) : '') + (card.paid_by_card ? ' · by card' : '') + (refunded ? ' · refunded' : '') : (d.due_date ? 'Due ' + day(d.due_date) : 'Sent');
     var h = '<div class="card">'
       + '<div class="kind">Invoice' + (d.bill_to_name ? ' for ' + esc(d.bill_to_name) : '') + '</div>'
