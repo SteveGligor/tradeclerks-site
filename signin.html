@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self'; style-src 'self' 'sha256-NRe4CBk+xmCagelszVhYd9erzyvtiquED1rXN6YPNew='; script-src 'sha256-DYLU4Sqq8jjT9DAil5zv4Bn3Oa0kxLMzv37veAhj3Xg='; base-uri 'none'; form-action 'none'">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in · Trade Clerks</title>
+<!--
+  Where the sign-in email's button lands when the Trade Clerks app doesn't open it: a phone
+  without the app, a computer, or a mail app's own browser (website plan 2.7, site PR S2; the
+  link is https://tradeclerks.com/signin#token_hash=…, paywall PR 14, trade-clerks #480).
+  On an iPhone with the app, iOS opens the app instead and this page is never loaded
+  (/.well-known/apple-app-site-association).
+  This page never reads, checks or sends the token: an email scanner that opens the link can't
+  use it up, and the token never reaches the server (it sits after the #, which a browser never
+  sends). The one script only takes the #… out of the address bar, so it isn't kept in history
+  or synced tabs. Nothing is loaded from another site and no referrer is sent.
+  Named signin.html, not signin/index.html, so /signin answers with no redirect.
+-->
+<script>if (location.hash) history.replaceState(null, '', location.pathname + location.search);</script>
+<link rel="icon" href="/logo.png">
+<link rel="stylesheet" href="/style.css">
+<style>
+  body { font-family: system-ui, -apple-system, sans-serif; }
+  a { color: var(--navy); }
+  .box { max-width: 480px; margin: 48px auto; padding: 32px 24px; background: #fff; border-radius: 14px; box-shadow: 0 1px 3px rgba(27, 42, 74, 0.08); }
+  .box h1 { font-size: 24px; line-height: 1.25; margin: 0 0 12px; }
+  .box h2 { font-size: 18px; margin: 24px 0 6px; }
+  .box p { color: var(--grey); line-height: 1.6; margin: 0 0 10px; }
+  .box strong { color: var(--navy); }
+  .foot { padding-top: 0; }
+  .foot a { display: inline-block; padding: 12px 6px; }
+</style>
+</head>
+<body>
+<main class="box">
+  <h1>Sign in on your iPhone</h1>
+  <p>The sign-in email works in the Trade Clerks app. Nothing on this page signs you in.</p>
+
+  <h2>On your iPhone, with the app</h2>
+  <p>Go back to Trade Clerks and enter the code from the same email on the <strong>Check your email</strong> screen.</p>
+  <p>If that screen is closed, tap <strong>Email me a sign-in link</strong> on the <strong>Sign in</strong> screen to get a new email.</p>
+
+  <h2>On your iPhone, without the app</h2>
+  <p>Trade Clerks isn't in the App Store yet.</p>
+
+  <h2>On a computer</h2>
+  <p>Open the email on your iPhone and tap <strong>Sign in</strong> there, or enter its code in the app.</p>
+
+  <p>The button and the code are for one sign-in, and both stop working after an hour.</p>
+</main>
+<footer class="foot">
+  <a href="/support">Support</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a>
+</footer>
+</body>
+</html>

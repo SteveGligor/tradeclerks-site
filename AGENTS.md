@@ -30,9 +30,13 @@ disagree, or the app repo isn't at hand, stop and ask Steve.
 `v/index.html` (the invoice or quote a customer opens from an email; every such email sent
 since 2026-11-04 points at it), `connect/google.html` (the return address registered at
 Google), `style.css` and `logo.png` are **never edited by a redesign or a hosting change**, and
-the host is given **no `_headers` and no `_redirects` file** (`tests/published-files.test.mjs`
-fails if either is published), so no header of ours is set on the first two and the addresses
-in use (`/v/`, `/connect/google`) answer 200 with no redirect. Only their other spellings
+the host is given **no `_redirects` file and a `_headers` file with one rule only**
+(`tests/published-files.test.mjs` fails otherwise), so no header of ours is set on the first two
+and the addresses in use (`/v/`, `/connect/google`) answer 200 with no redirect. The one rule
+(site PR S2, 2026-11-18) gives the Password AutoFill and sign-in link file,
+`/.well-known/apple-app-site-association`, its `application/json` type: it has no extension, and
+Cloudflare serves such a file with no type at all. Any other rule in `_headers` is its own
+HIGH-RISK pull request. (Until S2 the rule was "no `_headers` file".) Only their other spellings
 (`/v`, `/v/index.html`, `/connect/google.html`) are sent on to those addresses by the host. A change to any of them is its
 own HIGH-RISK pull request, tested with a real invoice link, a real quote link and a real
 Google connect.
@@ -42,7 +46,8 @@ Google connect.
 The app repo's list applies. Here that means: anything that changes who serves the site or an
 address already in use (`wrangler.jsonc`, `make-dist.mjs`, `_config.yml`, `CNAME`); `/v/`,
 `/connect/google`, `/stripe/`; the legal text (`content/`, `terms.html`, `privacy.html`);
-sign-in, sign-up and payment pages; any security header. Such a pull request says
+sign-in, sign-up and payment pages (`/signin` since S2); the Password AutoFill and sign-in link
+file (`.well-known/apple-app-site-association`) and `_headers`; any security header. Such a pull request says
 "HIGH-RISK: <area>" and **"NEEDS FABLE REVIEW BEFORE MERGE"** at the top of its description and
 gets a `cold-reviewer` run on Fable (the agent lives in the app repo's `.claude/agents/`), its
 findings numbered in the description with what was done about each.
@@ -79,6 +84,9 @@ An agent checks the public site (website plan 5.1):
 - `/`, `/terms`, `/privacy` answer 200 with the right words, and `/terms.html` reaches `/terms`;
 - `/v/` answers 200 and is byte for byte the reviewed file;
 - `/connect/google?state=x`, `/stripe/return` and `/stripe/refresh` answer 200 with no redirect;
+- `/signin` and `/support` answer 200 with no redirect (since S2);
+- `/.well-known/apple-app-site-association` answers 200 with no redirect, as `application/json`,
+  byte for byte the reviewed file, and `/_headers` answers 404 (since S2);
 - `/style.css` and `/logo.png` answer 200, unchanged, with the same content type as before;
 - no page has a script or a rewritten email address it didn't have before;
 - the working files (`README.md`, `AGENTS.md`, `CLAUDE.md`, `build.py`, `make-dist.mjs`,
