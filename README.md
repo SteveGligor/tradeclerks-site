@@ -1,6 +1,6 @@
 # tradeclerks.com
 
-Holding page, Terms and Privacy for the Trade Clerks app, the customer page (`/v/`) and the return pages for Google and Stripe.
+Holding page, Terms, Privacy and Support for the Trade Clerks app, the customer page (`/v/`), the return pages for Google and Stripe, and the sign-in link's landing page (`/signin`) with the file Apple's servers read for it and for Password AutoFill (`/.well-known/apple-app-site-association`).
 
 **Where it's served from.** The site is moving from GitHub Pages to Cloudflare (site PR S1; the app repo's `docs/plans/WEBSITE_PLAN.md`, section 5). Until the last step of the move both are set up: every merge to `main` is built by both, and `tradeclerks.com` is answered by GitHub Pages until the switch and by Cloudflare after it. Cloudflare serves plain files and runs no code of ours: its build runs the published-files test and then `node make-dist.mjs`, which copies the published files, and only those, into `dist/`, and `wrangler.jsonc` tells it to serve that folder (the two commands set in Cloudflare's dashboard are in that file's first comment). `make-dist.mjs` lists every published file and every working file that is never served; `_config.yml` tells GitHub Pages the same. `node --test tests/published-files.test.mjs` holds the two together, and fails when a new file is in neither list. Agents working here read `AGENTS.md` first.
 

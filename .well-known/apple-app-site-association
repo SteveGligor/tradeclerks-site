@@ -1,0 +1,16 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["3B8428C27V.com.tradeclerks.app"],
+        "components": [
+          { "/": "/signin" },
+          { "/": "/signin/" }
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": ["3B8428C27V.com.tradeclerks.app"]
+  }
+}

@@ -24,6 +24,15 @@ export const PUBLISHED = [
   'connect/google.html',
   'stripe/return.html',
   'stripe/refresh.html',
+  // Site PR S2 (website plan 2.7, 2.8): the sign-in link's landing page, the support page,
+  // the Password AutoFill and sign-in link file Apple's servers read, and the one header rule
+  // that gives that file its type. Cloudflare reads _headers as settings and never serves it.
+  // GitHub Pages skips the last two (names starting with "." or "_"), so on a way back to
+  // GitHub before the move's last step only the site file is missing (website plan 5.3).
+  'signin.html',
+  'support.html',
+  '.well-known/apple-app-site-association',
+  '_headers',
 ];
 
 // The repo's own working files: never served. A name ending in "/" is a whole folder.

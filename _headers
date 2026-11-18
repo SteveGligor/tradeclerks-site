@@ -1,0 +1,5 @@
+# One rule only (site PR S2): the Password AutoFill and sign-in link file has no extension,
+# so Cloudflare would serve it with no content type. Nothing else gets a header from this file;
+# tests/published-files.test.mjs fails if it holds anything more (AGENTS.md, the customer page).
+/.well-known/apple-app-site-association
+  Content-Type: application/json
