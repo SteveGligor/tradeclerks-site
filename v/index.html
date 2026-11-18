@@ -25,7 +25,12 @@
      only when the server says so (Stripe's webhook).
      Card payments PR 2: when the invoice's own card payment was refunded in full (or the
      customer's bank returned it), the server says `refunded` and the page reads "Refunded" where
-     it said "Paid, thank you". It stays without a pay button until the business bills again. */
+     it said "Paid, thank you". It stays without a pay button until the business bills again.
+     Card payments PR 4: a business that takes cards through its own Square, PayPal … account
+     shows "Pay with Square" where Pay by card would be. The server sends the address only for a
+     payment provider on its list; the page tests it again (https, a plain host, nothing but
+     address characters), prints it as an ordinary link with the provider's name as its words,
+     and opens it in a new tab as it is, with nothing added and no referrer. Never both buttons. */
   .paycard { margin-top: 16px; }
   .paycard .btn { width: 100%; text-align: center; }
   @media (min-width: 700px) { .paycard .btn { width: auto; } }
@@ -114,7 +119,7 @@
   var autoPay = kind === 'invoice' && m[3] === '&pay=1' && !returned;
   // Tidy the address: no ?paid / &pay left to repeat on a reload
   try { history.replaceState(null, '', location.pathname + '#' + m[1] + '=' + token); } catch (e) {}
-  var state = { doc: null, biz: null, hasPdf: false, option: null, ticked: {}, card: null, paying: false, confirming: returned === 'paid', confirmTries: 0 };
+  var state = { doc: null, biz: null, hasPdf: false, option: null, ticked: {}, card: null, ownLink: null, paying: false, confirming: returned === 'paid', confirmTries: 0 };
 
   // The token goes in a POST body, never in the URL, so no request log keeps it
   post({ token: token, action: 'page' })
@@ -128,6 +133,7 @@
       state.biz = r.body.page.business || {};
       state.hasPdf = !!r.body.page.has_pdf;
       state.card = r.body.card || null;
+      state.ownLink = readOwnLink(r.body.own_link);
       if (state.doc.kind === 'quote') {
         var opts = state.doc.options || [];
         state.option = state.doc.accepted_option_id || (opts.length ? opts[0].id : null);
@@ -187,6 +193,7 @@
     h += sums(d);
     if (!paid && Number(d.total) > 0 && b.payment_instructions) h += '<h2>How to pay</h2><div class="pay">' + esc(b.payment_instructions) + '</div>';
     h += payBlock(d, b, paid);
+    h += ownLinkBlock(d, b, paid);
     h += actions(b, 'invoice');
     if (b.review_url && /^https:\/\/(g\.page|maps\.app\.goo\.gl|goo\.gl|(www\.|search\.|maps\.|business\.)?google\.[a-z]{2,3}(\.[a-z]{2})?)\//.test(b.review_url)) {
       h += '<p class="hint">Happy with the work? <a href="' + esc(b.review_url) + '" rel="noopener">Leave ' + esc(b.name || 'us') + ' a Google review</a></p>';
@@ -348,6 +355,32 @@
       + '<div class="err sr" id="pay-err"></div></div>';
   }
 
+  // The business's own payment link (Square, PayPal …): one ordinary link, styled as the button.
+  // Only while there is something to pay and no card payment of ours is offered, open or made.
+  function ownLinkBlock(d, b, paid) {
+    var link = state.ownLink, card = state.card || {};
+    if (!link || paid || !(Number(d.total) > 0)) return '';
+    if (card.offer || card.paid_by_card || card.open_checkout) return '';
+    return '<div class="paycard">'
+      + (b.payment_instructions ? '' : '<h2>Pay</h2>')
+      + '<a class="btn primary" id="ownlink" href="' + esc(link.url) + '" target="_blank" rel="noopener noreferrer">Pay with ' + esc(link.name) + '</a>'
+      + '<p class="hint">Opens ' + esc(link.name) + ' in a new tab. This page shows paid once ' + esc(b.name || 'the business') + ' has recorded your payment.</p></div>';
+  }
+
+  // What the server sent as own_link, kept only if it is exactly a provider name and a plain
+  // https address: the same pattern the server and the database hold it to, and what the
+  // browser's own address parser makes of it must agree (https, that host, no sign-in part, no
+  // port). Anything else is dropped and the page shows no button.
+  function readOwnLink(v) {
+    if (!v || typeof v !== 'object' || typeof v.url !== 'string' || typeof v.name !== 'string') return null;
+    if (!/^[A-Za-z0-9][A-Za-z0-9 .&-]{0,29}$/.test(v.name)) return null;
+    if (v.url.length > 500 || !/^https:\/\/[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+(\/[A-Za-z0-9/?#&=%+@._~-]*)?$/.test(v.url)) return null;
+    var u;
+    try { u = new URL(v.url); } catch (e) { return null; }
+    if (u.protocol !== 'https:' || u.hostname !== v.url.slice(8).split('/')[0] || u.username || u.password || u.port) return null;
+    return { name: v.name, url: v.url };
+  }
+
   function notValid() { return '<div class="card center">This link isn\'t valid.</div>'; }
   function couldntLoad() { return '<div class="card center">Couldn\'t load this page right now. Try again in a moment.</div>'; }
   function show(html) { page.innerHTML = html; }
@@ -486,6 +519,7 @@
         if (j && j.page) {
           state.doc = j.page.document || state.doc;
           state.card = j.card || null;
+          state.ownLink = readOwnLink(j.own_link);
           if (state.doc.status === 'paid') state.confirming = false;
           render();
         }
