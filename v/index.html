@@ -22,7 +22,10 @@
      email's button) goes straight to Checkout. Checkout comes back to ?paid=1 or ?cancelled=1
      with the fragment; the token is also kept in sessionStorage before leaving, in case the
      fragment doesn't survive the trip. The page never marks anything paid itself: it shows paid
-     only when the server says so (Stripe's webhook). */
+     only when the server says so (Stripe's webhook).
+     Card payments PR 2: when the invoice's own card payment was refunded in full (or the
+     customer's bank returned it), the server says `refunded` and the page reads "Refunded" where
+     it said "Paid, thank you". It stays without a pay button until the business bills again. */
   .paycard { margin-top: 16px; }
   .paycard .btn { width: 100%; text-align: center; }
   @media (min-width: 700px) { .paycard .btn { width: auto; } }
@@ -165,12 +168,14 @@
   function invoiceCard(d, b) {
     var paid = d.status === 'paid';
     var card = state.card || {};
-    var status = paid ? 'Paid' + (d.paid_at ? ' ' + day(d.paid_at) : '') + (card.paid_by_card ? ' · by card' : '') : (d.due_date ? 'Due ' + day(d.due_date) : 'Sent');
+    // The invoice's own card payment went back to the customer (the server's word, never the page's)
+    var refunded = paid && card.refunded === true;
+    var status = paid ? 'Paid' + (d.paid_at ? ' ' + day(d.paid_at) : '') + (card.paid_by_card ? ' · by card' : '') + (refunded ? ' · refunded' : '') : (d.due_date ? 'Due ' + day(d.due_date) : 'Sent');
     var h = '<div class="card">'
       + '<div class="kind">Invoice' + (d.bill_to_name ? ' for ' + esc(d.bill_to_name) : '') + '</div>'
       + '<p class="number">#' + esc(d.number || '') + '</p>'
       + '<div class="status">' + esc(status) + '</div>'
-      + '<p class="total">' + (Number(d.total) === 0 ? 'No charge' : money(d.total, d)) + (paid ? '<small>Paid, thank you</small>' : (Number(d.total) === 0 ? '' : '<small>Total due</small>')) + '</p>';
+      + '<p class="total">' + (Number(d.total) === 0 ? 'No charge' : money(d.total, d)) + (paid ? '<small>' + (refunded ? 'Refunded' : 'Paid, thank you') + '</small>' : (Number(d.total) === 0 ? '' : '<small>Total due</small>')) + '</p>';
     var facts = [];
     if (d.sent_at) facts.push(['Sent', day(d.sent_at)]);
     if (d.service_address) facts.push(['Service address', d.service_address]);
