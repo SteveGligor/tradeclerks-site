@@ -2,7 +2,7 @@
   "applinks": {
     "details": [
       {
-        "appIDs": ["TEAMID-FROM-STEVE.com.tradeclerks.app"],
+        "appIDs": ["3B8428C27V.com.tradeclerks.app"],
         "components": [
           { "/": "/signin" },
           { "/": "/signin/" }
@@ -11,6 +11,6 @@
     ]
   },
   "webcredentials": {
-    "apps": ["TEAMID-FROM-STEVE.com.tradeclerks.app"]
+    "apps": ["3B8428C27V.com.tradeclerks.app"]
   }
 }
